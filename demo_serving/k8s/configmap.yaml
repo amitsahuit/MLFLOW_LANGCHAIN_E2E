@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlflow-serving-config
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: config
+data:
+  # Server Configuration
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  LOG_LEVEL: "info"
+  WORKERS: "1"
+  
+  # MLflow Configuration
+  MLFLOW_TRACKING_URI: "http://mlflow-server:5000"
+  MLFLOW_MODEL_URI: "models:/langchain-e2e-model/1"
+  MLFLOW_ARTIFACT_PATH: "s3://aiongenbucket/production_data/mlartifacts/1"
+  
+  # S3 Configuration (non-sensitive)
+  S3_ENDPOINT_URL: "http://minio:9000"
+  S3_BUCKET_NAME: "aiongenbucket"
+  S3_REGION: "us-east-1"
+  
+  # Model Configuration
+  MODEL_CACHE_DIR: "/tmp/mlflow_models"
+  MAX_MODEL_CACHE_SIZE: "1073741824"  # 1GB
+  MODEL_TIMEOUT: "300"
+  
+  # Health Check Configuration
+  HEALTH_CHECK_TIMEOUT: "30"
+  READINESS_CHECK_TIMEOUT: "60"
+  
+  # Monitoring Configuration
+  METRICS_ENABLED: "true"
+  PROMETHEUS_PORT: "8001"
+  
+  # CORS Configuration
+  CORS_ORIGINS: '["http://localhost:3000", "http://localhost:8080"]'
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mlflow-serving-secrets
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: secrets
+type: Opaque
+stringData:
+  # S3 Credentials
+  S3_ACCESS_KEY: "hadoop"
+  S3_SECRET_KEY: "hadoop"

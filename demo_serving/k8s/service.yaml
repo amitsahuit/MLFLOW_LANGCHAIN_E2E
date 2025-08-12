@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-serving
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: api-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/api/v1/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 8001
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: api-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-serving-headless
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: api-server
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: api-server

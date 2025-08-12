@@ -1,0 +1,167 @@
+services:
+  # MLflow Model Serving Application
+  mlflow-serving:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+    ports:
+      - "6000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - MLFLOW_MODEL_URI=models:/langchain-e2e-model/1
+      - MLFLOW_ARTIFACT_PATH=s3://aiongenbucket/production_data/mlartifacts/1
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=hadoop
+      - S3_SECRET_KEY=hadooppass
+      - S3_BUCKET_NAME=aiongenbucket
+      - S3_REGION=us-east-1
+      - MODEL_CACHE_DIR=/tmp/mlflow_models
+      - METRICS_ENABLED=true
+    volumes:
+      - model_cache:/tmp/mlflow_models
+      - app_logs:/app/logs
+    depends_on:
+      - minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - mlflow-network
+
+  # Development version with hot reload
+  mlflow-serving-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: development
+    ports:
+      - "6001:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=debug
+      - RELOAD=true
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+      - MLFLOW_MODEL_URI=models:/langchain-e2e-model/1
+      - MLFLOW_ARTIFACT_PATH=s3://aiongenbucket/production_data/mlartifacts/1
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=hadoop
+      - S3_SECRET_KEY=hadooppass
+      - S3_BUCKET_NAME=aiongenbucket
+      - MODEL_CACHE_DIR=/tmp/mlflow_models
+    volumes:
+      - ../app:/app/app  # Mount source for hot reload
+      - model_cache_dev:/tmp/mlflow_models
+    depends_on:
+      - minio
+    profiles:
+      - dev
+    networks:
+      - mlflow-network
+
+  # MinIO S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=hadoop
+      - MINIO_ROOT_PASSWORD=hadooppass
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mlflow-network
+
+  # MLflow Server (optional - for complete setup)
+  mlflow-server:
+    image: python:3.10-slim
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=hadoop
+      - AWS_SECRET_ACCESS_KEY=hadooppass
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+    command: >
+      bash -c "
+        pip install mlflow boto3 &&
+        mlflow server 
+        --host 0.0.0.0 
+        --port 5000 
+        --backend-store-uri sqlite:///mlflow.db 
+        --default-artifact-root s3://aiongenbucket/mlflow-artifacts/
+      "
+    volumes:
+      - mlflow_db:/mlflow.db
+    depends_on:
+      - minio
+    profiles:
+      - with-mlflow
+    networks:
+      - mlflow-network
+
+  # Prometheus (optional - for monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    profiles:
+      - monitoring
+    networks:
+      - mlflow-network
+
+  # Grafana (optional - for monitoring dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    profiles:
+      - monitoring
+    networks:
+      - mlflow-network
+
+volumes:
+  model_cache:
+    driver: local
+  model_cache_dev:
+    driver: local
+  app_logs:
+    driver: local
+  minio_data:
+    driver: local
+  mlflow_db:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  mlflow-network:
+    driver: bridge

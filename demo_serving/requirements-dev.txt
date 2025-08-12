@@ -1,0 +1,47 @@
+# Development and Testing Dependencies
+
+# Base requirements
+-r requirements.txt
+
+# Code Quality
+black==23.12.1
+isort==5.13.2
+flake8==6.1.0
+mypy==1.8.0
+pre-commit==3.6.0
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-xdist==3.5.0
+pytest-mock==3.12.0
+pytest-asyncio==0.23.2
+httpx==0.26.0
+requests-mock==1.11.0
+
+# Security
+bandit==1.7.5
+safety==2.3.5
+
+# Performance Testing
+locust==2.20.0
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.5.3
+mkdocs-mermaid2-plugin==1.1.1
+
+# Development Tools
+ipython==8.18.1
+jupyter==1.0.0
+watchdog==3.0.0
+
+# Testing Utilities
+factory-boy==3.3.0
+freezegun==1.2.2
+responses==0.24.1
+
+# Type Stubs
+types-requests==2.31.0.20240106
+types-redis==4.6.0.11
+types-urllib3==1.26.25.14

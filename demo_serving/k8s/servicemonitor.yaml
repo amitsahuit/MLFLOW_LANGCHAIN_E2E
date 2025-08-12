@@ -1,0 +1,135 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mlflow-serving-metrics
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: monitoring
+    release: prometheus  # Match your Prometheus operator labels
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mlflow-serving
+      app.kubernetes.io/component: api-server
+  endpoints:
+  - port: http
+    path: /api/v1/metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+  namespaceSelector:
+    matchNames:
+    - mlflow-serving
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mlflow-serving-alerts
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: monitoring
+    release: prometheus
+spec:
+  groups:
+  - name: mlflow-serving.rules
+    rules:
+    # High error rate alert
+    - alert: MLflowServingHighErrorRate
+      expr: |
+        (
+          rate(http_requests_total{job="mlflow-serving", status=~"5.."}[5m]) /
+          rate(http_requests_total{job="mlflow-serving"}[5m])
+        ) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving has high error rate"
+        description: "MLflow Serving error rate is {{ $value | humanizePercentage }} for the last 5 minutes."
+    
+    # High response time alert
+    - alert: MLflowServingHighLatency
+      expr: |
+        histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="mlflow-serving"}[5m])) > 5
+      for: 5m
+      labels:
+        severity: warning
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving has high response time"
+        description: "MLflow Serving 95th percentile response time is {{ $value }}s for the last 5 minutes."
+    
+    # Model prediction failures
+    - alert: MLflowServingPredictionFailures
+      expr: |
+        rate(predictions_total{job="mlflow-serving", status="error"}[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: critical
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving prediction failures detected"
+        description: "MLflow Serving is experiencing {{ $value }} prediction failures per second."
+    
+    # Service down alert
+    - alert: MLflowServingDown
+      expr: |
+        up{job="mlflow-serving"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving is down"
+        description: "MLflow Serving has been down for more than 1 minute."
+    
+    # Pod restart alert
+    - alert: MLflowServingPodRestarting
+      expr: |
+        increase(kube_pod_container_status_restarts_total{namespace="mlflow-serving", container="mlflow-serving"}[15m]) > 2
+      for: 0m
+      labels:
+        severity: warning
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving pod is restarting frequently"
+        description: "MLflow Serving pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes."
+    
+    # Memory usage alert
+    - alert: MLflowServingHighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{namespace="mlflow-serving", container="mlflow-serving"} /
+          container_spec_memory_limit_bytes{namespace="mlflow-serving", container="mlflow-serving"}
+        ) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving high memory usage"
+        description: "MLflow Serving pod {{ $labels.pod }} memory usage is {{ $value | humanizePercentage }}."
+    
+    # CPU usage alert
+    - alert: MLflowServingHighCPUUsage
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{namespace="mlflow-serving", container="mlflow-serving"}[5m]) /
+          container_spec_cpu_quota{namespace="mlflow-serving", container="mlflow-serving"} * 100000
+        ) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        service: mlflow-serving
+      annotations:
+        summary: "MLflow Serving high CPU usage"
+        description: "MLflow Serving pod {{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}."

@@ -1,0 +1,104 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlflow-serving-ingress
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: ingress
+  annotations:
+    # Nginx ingress controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    
+    # Body size (for large prediction requests)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:3000, http://localhost:8080"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    
+    # Health check
+    nginx.ingress.kubernetes.io/health-check-path: "/api/v1/health"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mlflow-serving.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-serving
+            port:
+              number: 80
+  - host: mlflow-api.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-serving
+            port:
+              number: 80
+      - path: /docs
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-serving
+            port:
+              number: 80
+      - path: /redoc
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-serving
+            port:
+              number: 80
+  # TLS configuration (if needed)
+  # tls:
+  # - hosts:
+  #   - mlflow-serving.local
+  #   - mlflow-api.local
+  #   secretName: mlflow-serving-tls
+
+---
+# Alternative ingress for metrics (Prometheus scraping)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlflow-serving-metrics-ingress
+  namespace: mlflow-serving
+  labels:
+    app.kubernetes.io/name: mlflow-serving
+    app.kubernetes.io/component: metrics-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: mlflow-metrics.local
+    http:
+      paths:
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: mlflow-serving
+            port:
+              number: 8001

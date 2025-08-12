@@ -1,0 +1,39 @@
+# FastAPI and web framework dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# MLflow and model serving
+mlflow>=2.10.0
+mlflow[extras]>=2.10.0
+
+# HuggingFace and ML dependencies
+transformers>=4.35.0
+torch>=2.0.0
+langchain>=0.1.0
+langchain-community>=0.0.10
+accelerate>=0.25.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# S3 and cloud storage
+boto3>=1.34.0
+s3fs>=2024.2.0
+botocore>=1.34.0
+
+# Monitoring and observability
+prometheus-client==0.19.0
+structlog==23.2.0
+
+# HTTP client for health checks
+httpx==0.25.2
+requests>=2.31.0
+
+# Environment management
+python-dotenv==1.0.0
+
+# Security
+cryptography>=41.0.0

@@ -1,0 +1,33 @@
+# Core MLflow and ML libraries
+mlflow>=2.16.0
+transformers>=4.45.0
+torch>=2.1.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# LangChain ecosystem
+langchain>=0.3.0
+langchain-community>=0.3.0
+
+# S3/Cloud storage
+boto3>=1.35.0
+s3fs>=2024.9.0
+botocore>=1.35.0
+
+# HuggingFace ecosystem
+huggingface_hub>=0.25.0
+accelerate>=0.34.0
+
+# Environment and configuration
+python-dotenv>=1.0.0
+
+# FastAPI server for Swagger UI (optional)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Optional: Development and debugging
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Note: Some dependencies may be automatically installed by the above packages
+# Run: pip install -r requirements.txt

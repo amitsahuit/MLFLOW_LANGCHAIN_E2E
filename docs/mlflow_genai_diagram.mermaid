@@ -1,0 +1,195 @@
+%%{init: {
+  'theme': 'dark',
+  'themeVariables': {
+    'primaryColor': '#1e40af',
+    'primaryTextColor': '#ffffff',
+    'primaryBorderColor': '#60a5fa',
+    'lineColor': '#60a5fa',
+    'secondaryColor': '#7c3aed',
+    'tertiaryColor': '#0891b2',
+    'background': '#0f172a',
+    'mainBkg': '#1e293b',
+    'secondBkg': '#334155',
+    'tertiaryBkg': '#475569',
+    'primaryBorderColor': '#60a5fa',
+    'secondaryBorderColor': '#a78bfa',
+    'tertiaryBorderColor': '#38bdf8',
+    'primaryTextColor': '#f8fafc',
+    'secondaryTextColor': '#e2e8f0',
+    'tertiaryTextColor': '#cbd5e1',
+    'nodeTextColor': '#f8fafc',
+    'textColor': '#f8fafc',
+    'titleColor': '#f8fafc',
+    'labelTextColor': '#f8fafc',
+    'actorLineColor': '#60a5fa',
+    'actorBorder': '#60a5fa',
+    'actorBkg': '#1e293b',
+    'actorTextColor': '#f8fafc',
+    'activationBorderColor': '#60a5fa',
+    'activationBkgColor': '#334155',
+    'sequenceNumberColor': '#f8fafc',
+    'noteBorderColor': '#60a5fa',
+    'noteBkgColor': '#1e293b',
+    'noteTextColor': '#f8fafc',
+    'sectionBkgColor': '#1e293b',
+    'altSectionBkgColor': '#334155',
+    'sectionBkgColor2': '#475569',
+    'excludeBkgColor': '#64748b',
+    'taskBorderColor': '#60a5fa',
+    'taskBkgColor': '#334155',
+    'taskTextColor': '#f8fafc',
+    'taskTextLightColor': '#f8fafc',
+    'taskTextOutsideColor': '#f8fafc',
+    'taskTextClickableColor': '#60a5fa',
+    'activeTaskBorderColor': '#3b82f6',
+    'activeTaskBkgColor': '#1e40af',
+    'gridColor': '#475569',
+    'doneTaskBkgColor': '#10b981',
+    'doneTaskBorderColor': '#059669',
+    'critBorderColor': '#ef4444',
+    'critBkgColor': '#dc2626',
+    'todayLineColor': '#60a5fa',
+    'labelColor': '#f8fafc',
+    'errorBkgColor': '#7f1d1d',
+    'errorTextColor': '#fca5a5',
+    'clusterBkg': '#1e293b',
+    'clusterBorder': '#60a5fa',
+    'defaultLinkColor': '#60a5fa',
+    'edgeLabelBackground': '#1e293b',
+    'nodeTextColor': '#f8fafc'
+  }
+}}%%
+
+flowchart TB
+    subgraph Development["🧪 DEVELOPMENT & EXPERIMENTATION"]
+        A[🎯 GenAI Project Start] --> B{Choose Framework}
+        B --> C1[OpenAI]
+        B --> C2[LangChain]
+        B --> C3[LlamaIndex]
+        B --> C4[Anthropic]
+        B --> C5[DSPy]
+        B --> C6[PydanticAI]
+        
+        C1 --> D[📝 Prompt Engineering]
+        C2 --> D
+        C3 --> D
+        C4 --> D
+        C5 --> D
+        C6 --> D
+        
+        D --> E[🔄 Auto-Tracing Enabled<br/>mlflow.openai.autolog<br/>mlflow.langchain.autolog<br/>etc.]
+        
+        E --> F[🧪 Experiment Tracking]
+        F --> G[📊 Capture Traces<br/>- Prompts<br/>- Retrievals<br/>- Tool Calls<br/>- Responses<br/>- Latency & Cost]
+    end
+    
+    subgraph Evaluation["⚖️ EVALUATION & QUALITY ASSESSMENT"]
+        G --> H[📋 Create Evaluation Dataset<br/>from Production Traces]
+        H --> I[🤖 LLM Judges<br/>- Correctness<br/>- Safety<br/>- Groundedness<br/>- Retrieval Relevance<br/>- Context Sufficiency]
+        
+        I --> J[📈 Custom Metrics<br/>- Business Logic<br/>- Domain Specific<br/>- Performance KPIs]
+        
+        J --> K[🔍 Comparative Analysis<br/>- Compare Models<br/>- Compare Prompts<br/>- Compare Providers]
+        
+        K --> L{Quality Threshold Met?}
+        L -->|No| M[🔧 Debug with Traces<br/>Identify Issues]
+        M --> D
+        L -->|Yes| N[✅ Create LoggedModel<br/>Version Control]
+    end
+    
+    subgraph Registry["📦 MODEL & PROMPT REGISTRY"]
+        N --> O[🏷️ Model Registry<br/>- Version Models<br/>- Track Lineage<br/>- Link to Code/Git]
+        
+        O --> P[📝 Prompt Registry<br/>- Version Prompts<br/>- A/B Testing Ready<br/>- Unity Catalog Integration]
+        
+        P --> Q[🎯 Select Leader<br/>Best Model/Prompt Combo]
+    end
+    
+    subgraph Deployment["🚀 DEPLOYMENT & SERVING"]
+        Q --> R{Deployment Target}
+        R --> S1[☁️ Cloud Platforms<br/>- AWS SageMaker<br/>- Azure ML<br/>- GCP]
+        R --> S2[🏢 Databricks<br/>Mosaic AI Agent Serving]
+        R --> S3[🐳 Kubernetes]
+        R --> S4[⚡ FastAPI Server<br/>MLflow Serving]
+        
+        S1 --> T[🔌 Configure Production<br/>- MLFLOW_TRACKING_URI<br/>- Async Logging<br/>- Lightweight SDK]
+        S2 --> T
+        S3 --> T
+        S4 --> T
+    end
+    
+    subgraph Production["📊 PRODUCTION MONITORING"]
+        T --> U[🔍 Production Tracing<br/>mlflow-tracing SDK<br/>95% smaller footprint]
+        
+        U --> V[📈 Monitor Metrics<br/>- Request Volume<br/>- Latency<br/>- Error Rates<br/>- Token Usage<br/>- Cost Analysis]
+        
+        V --> W[👥 Human Feedback<br/>- Thumbs Up/Down<br/>- Comments<br/>- Expert Annotations]
+        
+        W --> X[🎯 Quality Monitoring<br/>- Real-time Evaluation<br/>- Drift Detection<br/>- Performance Alerts]
+    end
+    
+    subgraph Optimization["🔄 CONTINUOUS IMPROVEMENT"]
+        X --> Y[📊 Analytics<br/>- User Behavior<br/>- Session Analysis<br/>- Feature Usage<br/>- ROI Metrics]
+        
+        Y --> Z[🎯 Identify Issues<br/>from Production Data]
+        
+        Z --> AA[🔄 Feedback Loop<br/>to Development]
+        AA --> H
+        
+        Z --> AB[🚀 A/B Testing<br/>Multiple Versions]
+        AB --> AC[📈 Performance<br/>Comparison]
+        AC --> Q
+    end
+    
+    subgraph Tools["🛠️ SUPPORTING TOOLS"]
+        AD[🔐 Unity Catalog<br/>Governance] -.-> O
+        AD -.-> P
+        AE[🔗 OpenTelemetry<br/>Integration] -.-> U
+        AF[📊 Databricks<br/>Lakehouse] -.-> Y
+        AG[🤖 Agent Evaluation<br/>Databricks] -.-> I
+    end
+    
+    %% Click handlers with documentation links
+    click A "https://mlflow.org/docs/latest/genai/" "Getting Started with MLflow GenAI"
+    click C1 "https://mlflow.org/docs/latest/llms/openai/index.html" "OpenAI Integration"
+    click C2 "https://mlflow.org/docs/latest/llms/langchain/index.html" "LangChain Integration"
+    click C3 "https://mlflow.org/docs/latest/llms/llama-index/index.html" "LlamaIndex Integration"
+    click C4 "https://mlflow.org/docs/latest/llms/anthropic/index.html" "Anthropic Integration"
+    click C5 "https://mlflow.org/docs/latest/llms/dspy/index.html" "DSPy Integration"
+    click C6 "https://mlflow.org/docs/latest/llms/pydantic-ai/index.html" "PydanticAI Integration"
+    click D "https://mlflow.org/docs/latest/llms/prompt-engineering/index.html" "Prompt Engineering Guide"
+    click E "https://mlflow.org/docs/latest/genai/tracing/index.html#automatic-tracing" "Auto-Tracing Documentation"
+    click F "https://mlflow.org/docs/latest/tracking.html" "Experiment Tracking"
+    click G "https://mlflow.org/docs/latest/genai/tracing/index.html" "MLflow Tracing"
+    click H "https://mlflow.org/docs/latest/llms/llm-evaluate/index.html#creating-an-evaluation-dataset" "Creating Evaluation Datasets"
+    click I "https://mlflow.org/docs/latest/llms/llm-evaluate/index.html#llm-as-a-judge-metrics" "LLM Judge Metrics"
+    click J "https://mlflow.org/docs/latest/llms/llm-evaluate/index.html#custom-metrics" "Custom Metrics"
+    click K "https://mlflow.org/docs/latest/llms/llm-evaluate/index.html#comparative-analysis" "Model Comparison"
+    click M "https://mlflow.org/docs/latest/genai/tracing/index.html#debugging" "Debugging with Traces"
+    click N "https://mlflow.org/docs/latest/genai/mlflow-3/index.html#loggedmodels" "LoggedModel Documentation"
+    click O "https://mlflow.org/docs/latest/model-registry.html" "Model Registry"
+    click P "https://mlflow.org/docs/latest/llms/prompt-engineering/prompt-registry.html" "Prompt Registry"
+    click Q "https://mlflow.org/docs/latest/model-registry.html#model-registry-workflows" "Model Selection Workflow"
+    click S1 "https://mlflow.org/docs/latest/python_api/mlflow.deployments.html" "Cloud Deployment"
+    click S2 "https://docs.databricks.com/en/generative-ai/agent-serving.html" "Databricks Agent Serving"
+    click S3 "https://mlflow.org/docs/latest/deployment/deploy-model-to-kubernetes/index.html" "Kubernetes Deployment"
+    click S4 "https://mlflow.org/docs/latest/deployment/index.html" "MLflow Model Serving"
+    click T "https://mlflow.org/docs/latest/genai/tracing/prod-tracing/index.html#configuration" "Production Configuration"
+    click U "https://mlflow.org/docs/latest/genai/tracing/prod-tracing/index.html" "Production Tracing"
+    click V "https://mlflow.org/docs/latest/genai/tracing/prod-tracing/index.html#monitoring-metrics" "Monitoring Metrics"
+    click W "https://mlflow.org/docs/latest/llms/llm-evaluate/index.html#human-feedback" "Human Feedback Collection"
+    click X "https://mlflow.org/docs/latest/genai/tracing/prod-tracing/index.html#quality-monitoring" "Quality Monitoring"
+    click Y "https://mlflow.org/docs/latest/genai/tracing/prod-tracing/index.html#analytics" "Production Analytics"
+    click AB "https://mlflow.org/docs/latest/llms/prompt-engineering/prompt-registry.html#a-b-testing" "A/B Testing"
+    click AD "https://docs.databricks.com/en/data-governance/unity-catalog/index.html" "Unity Catalog"
+    click AE "https://mlflow.org/docs/latest/genai/tracing/index.html#opentelemetry-integration" "OpenTelemetry Integration"
+    click AF "https://www.databricks.com/product/data-lakehouse" "Databricks Lakehouse"
+    click AG "https://docs.databricks.com/en/generative-ai/agent-evaluation/index.html" "Agent Evaluation"
+    
+    style Development fill:#1e40af,stroke:#60a5fa,stroke-width:3px,color:#ffffff
+    style Evaluation fill:#7c3aed,stroke:#a78bfa,stroke-width:3px,color:#ffffff
+    style Registry fill:#0891b2,stroke:#38bdf8,stroke-width:3px,color:#ffffff
+    style Deployment fill:#059669,stroke:#10b981,stroke-width:3px,color:#ffffff
+    style Production fill:#dc2626,stroke:#ef4444,stroke-width:3px,color:#ffffff
+    style Optimization fill:#ea580c,stroke:#fb923c,stroke-width:3px,color:#ffffff
+    style Tools fill:#334155,stroke:#64748b,stroke-width:2px,color:#e2e8f0
