@@ -7,3 +7,4 @@ local_mlflow_logs
 local_staging
 mlruns
 temp_prompts
+__pycache__

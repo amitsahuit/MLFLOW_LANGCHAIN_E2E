@@ -187,6 +187,11 @@ class S3Client:
             for obj in objects:
                 s3_key = obj['Key']
                 
+                # Skip directory markers (keys ending with '/')
+                if s3_key.endswith('/'):
+                    self.logger.debug(f"Skipping directory marker: {s3_key}")
+                    continue
+                
                 # Skip if matches exclude patterns
                 if any(pattern in s3_key for pattern in exclude_patterns):
                     self.logger.debug(f"Skipping {s3_key} (matches exclude pattern)")
@@ -194,7 +199,7 @@ class S3Client:
                 
                 # Calculate local path
                 relative_path = s3_key.replace(s3_prefix, '').lstrip('/')
-                if not relative_path:  # Skip directory markers
+                if not relative_path:  # Skip if no relative path
                     continue
                     
                 local_file_path = local_dir / relative_path
