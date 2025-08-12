@@ -1,5 +1,0 @@
-Human: {question}
-
-Assistant: I'll help you with that. Let me provide a helpful response.
-
-Response:

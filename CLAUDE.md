@@ -4,21 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an MLflow 3 Proof of Concept demonstrating comprehensive GenAI model lifecycle management with HuggingFace integration. The architecture implements a production-ready LLM application lifecycle with experimentation, model registry, deployment, and serving phases.
+This is an MLflow 3 End-to-End GenAI Lifecycle Management system demonstrating comprehensive MLflow integration with HuggingFace models, LangChain, and both local/S3 storage backends. The system implements a complete production-ready pipeline from experimentation to deployment and serving.
 
 ## Key Architecture
 
-**Layered Architecture:**
-- **Experiment Layer** (`mlflow_huggingface_experiment.py`) - Core model development with MLflow decorators (`@trace`, `@task`)
-- **Deployment Layer** (`deploy_model.py`) - Model registration using custom PyFunc wrapper
-- **Serving Layer** (`serve_model.py`) - Production API with subprocess server management
-- **Testing Layer** (`test_*.py`) - Multi-level testing including prompt A/B testing
+**Unified E2E Architecture:**
+- **Main Orchestrator** (`e2e_mlflow.py`) - Central controller with multiple execution modes (experiment, deploy, serve, all)
+- **Configuration Management** (`E2EConfig` dataclass) - Centralized config with S3/local storage flexibility
+- **Model Wrapper** (`HuggingFaceModelWrapper`) - Custom PyFunc implementation for MLflow compatibility
+- **Production Serving** (`fastapi_server.py`) - FastAPI server with Swagger UI and comprehensive APIs
+- **Export Pipeline** (`demo_serving/`) - Standalone Docker deployment system for remote machines
 
 **Core Integration Pattern:**
-- HuggingFace Transformers + LangChain + MLflow 3 native features
-- Custom `HuggingFaceModelWrapper` class bridges HuggingFace models with MLflow serving
-- Comprehensive observability through nested runs and tracing
-- CPU-optimized configuration for accessibility
+- HuggingFace GPT2/DialoGPT + LangChain + MLflow 3 native features
+- Hybrid storage architecture: SQLite backend + S3/local artifact storage
+- Complete observability through `@mlflow.trace` decorators and nested runs
+- Multi-mode execution: development, testing, deployment, and serving
 
 ## Development Commands
 
@@ -27,141 +28,197 @@ This is an MLflow 3 Proof of Concept demonstrating comprehensive GenAI model lif
 # Activate virtual environment
 source .venv/bin/activate
 
+# Install dependencies
+pip install -r requirements.txt
+
 # Start MLflow server (required for all operations)
 mlflow server --host 127.0.0.1 --port 5050
 ```
 
-### Core Workflows
+### Core E2E Workflows
+
+**Local Storage Mode:**
 ```bash
-# Run main experiment with tracing
-python mlflow_huggingface_experiment.py
+# Complete pipeline (experiment + deploy + test)
+python e2e_mlflow.py --mode all --data-dir "mlflow_data"
 
-# Register model in MLflow Model Registry
-python deploy_model.py
+# Individual stages
+python e2e_mlflow.py --mode experiment   # Run experiment only
+python e2e_mlflow.py --mode deploy      # Deploy model only
+python e2e_mlflow.py --mode serve       # Get serving command
 
-# Test deployed model locally
-python quick_test.py
+# FastAPI server with Swagger UI (recommended)
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5050
+export MLFLOW_MODEL_URI="models:/langchain-e2e-model/[VERSION]"
+python fastapi_server.py  # Access UI: http://localhost:5001/docs
+```
 
-# Start model serving API
-python serve_model.py
-# OR serve via MLflow CLI:
-mlflow models serve -m models:/huggingface-dialogpt-model/1 -p 5001 --host 0.0.0.0
+**S3 Storage Mode (with MinIO):**
+```bash
+# Start MinIO container
+docker run -d -p 9878:9000 -e "MINIO_ROOT_USER=hadoop" -e "MINIO_ROOT_PASSWORD=hadoop" --name minio-server minio/minio server /data
 
-# Test prompt templates and A/B testing
-python test_prompts.py
+# Configure S3 environment
+export AWS_ACCESS_KEY_ID=hadoop
+export AWS_SECRET_ACCESS_KEY=hadoop
+export AWS_DEFAULT_REGION=us-east-1
+export MLFLOW_S3_ENDPOINT_URL=http://localhost:9878
 
-# Test MLflow 3 native prompt features
-python mlflow3_native_prompts.py
+# Start MLflow server with S3 artifacts
+mlflow server \
+  --host 127.0.0.1 \
+  --port 5050 \
+  --backend-store-uri "sqlite:///$(pwd)/local_mlflow_backend/mlflow.db" \
+  --default-artifact-root "s3://aiongenbucket/production_data/mlartifacts"
+
+# Run complete S3 workflow
+python e2e_mlflow.py \
+  --mode all \
+  --data-dir "s3://aiongenbucket/production_data" \
+  --s3-endpoint-url "http://localhost:9878"
 ```
 
 ### API Testing
 ```bash
-# Test served model via curl
-curl -X POST http://localhost:5001/invocations \
+# Interactive Swagger UI (recommended)
+# Open: http://localhost:5001/docs
+
+# FastAPI endpoints
+curl -X POST http://localhost:5001/ask \
   -H "Content-Type: application/json" \
-  -d '{
-    "dataframe_split": {
-      "columns": ["question"],
-      "data": [["What is machine learning?"]]
-    }
-  }'
+  -d '{"question": "What is machine learning?", "max_new_tokens": 150}'
+
+curl -X POST http://localhost:5001/ask/batch \
+  -H "Content-Type: application/json" \
+  -d '{"questions": ["What is AI?", "How does ML work?"]}'
+
+# Health and model info
+curl http://localhost:5001/health
+curl http://localhost:5001/model/info
+```
+
+### Model Export for Remote Deployment
+```bash
+cd demo_serving
+
+# Export model to standalone Docker package
+python scripts/export_model_docker.py \
+  --model-uri models:/langchain-e2e-model/1 \
+  --s3-endpoint-url http://localhost:9878 \
+  --s3-access-key hadoop \
+  --s3-secret-key hadoop \
+  --output-dir ./exported_model
+
+# Deploy on remote machine (Docker only required)
+cd exported_model
+./build.sh && ./run.sh  # Access: http://localhost:8000/docs
 ```
 
 ## Configuration Management
 
-**Centralized Configuration Pattern:**
-- All experiments use `ExperimentConfig` dataclass in `mlflow_huggingface_experiment.py`
-- MLflow tracking URI: `http://127.0.0.1:5050`
-- Model serving port: `5001`
-- Default model: `microsoft/DialoGPT-small` (CPU-optimized)
+**E2EConfig Dataclass** (`e2e_mlflow.py:95-120`) - Centralized configuration with:
+- **Storage flexibility**: Local filesystem or S3/MinIO backends
+- **Model settings**: Default GPT2, configurable HuggingFace models
+- **MLflow integration**: Tracking URIs, experiment names, model registry
+- **S3 configuration**: Endpoint URLs, credentials, bucket management
 
-**Key Configuration Points:**
-- `MLFLOW_TRACKING_URI` - MLflow server endpoint
-- `MODEL_NAME` - Registered model name in MLflow Registry
-- `EXPERIMENT_NAME` - MLflow experiment for organizing runs
+**Key Configuration Constants:**
+- `MLFLOW_TRACKING_URI`: `http://127.0.0.1:5050`
+- `BASE_MODEL_NAME`: `gpt2` (CPU-optimized)
+- `REGISTERED_MODEL_NAME`: `langchain-e2e-model`
+- FastAPI serving port: `5001`, export serving port: `8000`
 
-## Model Lifecycle Workflow
+## E2E Execution Modes
 
-**Complete Lifecycle:**
-1. **Experimentation** → Load HuggingFace model → Register prompt templates → Create LangChain chain → Test with tracing → Evaluate performance
-2. **Registration** → Download model locally → Create PyFunc wrapper → Register in MLflow → Test deployment
-3. **Serving** → Load from registry → Start API server → Handle predictions → Monitor performance
-4. **Testing** → Prompt A/B testing → Quality evaluation → Performance benchmarking
+**Mode-Based Architecture** (`e2e_mlflow.py` main orchestrator):
+1. **`all` mode**: Complete pipeline (experiment → deploy → test → serve)
+2. **`experiment` mode**: Model loading, prompt registration, LangChain creation, evaluation
+3. **`deploy` mode**: Model registration in MLflow Registry with PyFunc wrapper
+4. **`test` mode**: Deployed model validation and testing
+5. **`serve` mode**: Generate serving commands for production deployment
+6. **`server-config` mode**: Display server configuration instructions
 
-**MLflow Integration Patterns:**
-- Use `@mlflow.trace` decorator for automatic tracing
-- Nested runs for individual inference steps
-- Comprehensive parameter, metric, and artifact logging
-- Model signatures with input examples for serving
+## Storage Architecture
 
-## Prompt Management Architecture
+**Hybrid Storage Design** (MLflow requirement):
+- **Backend Store**: Always local SQLite (`local_mlflow_backend/mlflow.db`) - contains experiment metadata
+- **Artifact Store**: Configurable local or S3 - contains model files and artifacts
+- **Staging Directory**: `local_staging/` for temporary processing
+- **Server Logs**: `local_mlflow_logs/` for debugging
 
-**Prompt Template System:**
-- Multiple template variations (simple, conversational, expert, educational)
-- MLflow 3 native prompt registry when supported
-- Fallback to artifact-based storage
-- A/B testing framework for template comparison
-- Performance metrics per template
-
-**Prompt Testing Workflow:**
+**S3 Integration Pattern**:
 ```python
-# Template variations stored in prompt_templates dict
-# Each template tested with same questions
-# Results logged to MLflow for comparison
-# Best-performing template identified through metrics
+# S3 artifacts while maintaining local SQLite backend
+--backend-store-uri "sqlite:///$(pwd)/local_mlflow_backend/mlflow.db"
+--default-artifact-root "s3://bucket/path/mlartifacts"
 ```
 
-## Custom Model Wrapper
+## HuggingFaceModelWrapper Implementation
 
-**HuggingFaceModelWrapper Class:**
-- Implements `mlflow.pyfunc.PythonModel` interface
-- Loads HuggingFace model and tokenizer in `load_context()`
-- Creates LangChain pipeline for prompt management
-- Handles multiple input formats (DataFrame, dict, string)
-- Provides consistent prediction API
+**Custom PyFunc Integration** (`e2e_mlflow.py:200+`):
+- **`load_context()`**: Initialize HuggingFace model/tokenizer from MLflow artifacts
+- **`predict()`**: Multi-format input handling (DataFrame, dict, string) with LangChain integration
+- **MLflow tracing**: Automatic span tracking for all predictions
+- **Error handling**: Graceful fallbacks and informative error messages
 
-**Key Implementation Details:**
-- Tokenizer padding configuration with fallback to EOS token
-- CPU device mapping for broad compatibility
-- LangChain integration for prompt templating
-- Error handling with informative messages
+**Key Implementation Features:**
+- CPU-optimized device mapping for accessibility
+- Tokenizer padding with EOS token fallback
+- LangChain pipeline creation for prompt templating
+- Comprehensive input validation and format conversion
 
-## Testing Strategy
+## FastAPI Production Server
 
-**Multi-Level Testing:**
-- **Unit Testing** - Basic model functionality and API contracts
-- **Integration Testing** - End-to-end workflow validation
-- **Prompt Testing** - A/B testing different prompt templates
-- **Performance Testing** - Response time and quality metrics
-- **Interactive Testing** - Real-time Q&A sessions
+**Enhanced API Server** (`fastapi_server.py`) with:
+- **Interactive Swagger UI**: Auto-generated documentation at `/docs`
+- **Multiple Endpoints**: `/ask`, `/ask/batch`, `/invocations`, `/health`, `/model/info`
+- **Pydantic Models**: Type validation with `QuestionRequest`, `BatchQuestionRequest`
+- **Production Features**: Async context managers, proper error handling, CORS support
 
-**Test Data:**
-Standard test questions cover AI/ML topics to validate model responses across different prompt templates.
+**API Endpoints:**
+- **`POST /ask`**: Single question with response metadata
+- **`POST /ask/batch`**: Multiple questions with batch processing
+- **`POST /invocations`**: MLflow-compatible endpoint for standard clients
+- **`GET /health`**: Service health and model status
+- **`GET /model/info`**: Comprehensive model metadata
 
-## Observability and Monitoring
+## MLflow 3 Integration Patterns
 
-**MLflow Tracing:**
-- Automatic tracing of all decorated functions
-- Nested runs for granular operation tracking
-- Parameter, metric, and artifact logging
-- Detailed error tracking and debugging support
+**Advanced Tracing Architecture** (`@mlflow.trace` decorators):
+- **Nested Runs**: Hierarchical tracking with parent/child relationships
+- **Automatic Spans**: Function-level tracing for all model operations
+- **Comprehensive Logging**: Parameters, metrics, artifacts, and tags
+- **GenAI Scorers**: Correctness and RelevanceToQuery when available
 
-**Key Metrics Tracked:**
-- Success rate, response length, processing time
-- Question/response quality assessments
-- Resource usage and performance benchmarks
-- Prompt template effectiveness comparisons
+**Prompt Management System**:
+- **Native MLflow GenAI**: Prompt registry with versioning support
+- **Artifact Fallback**: File-based storage when GenAI features unavailable
+- **Multi-Template Support**: Various prompt styles with A/B testing capabilities
 
-## Production Considerations
+## Export and Remote Deployment
 
-**Server Management:**
-- Subprocess-based MLflow model server
-- Health checks and readiness validation
-- Graceful startup/shutdown handling
-- Error recovery and restart capabilities
+**Standalone Docker Export** (`demo_serving/` directory):
+- **Model Packaging**: Complete artifact extraction from S3/local storage
+- **Docker Containerization**: Fully self-contained deployment packages
+- **Production FastAPI**: Independent server with monitoring and health checks
+- **Zero Dependencies**: No MLflow server or S3 access required on target machine
 
-**API Design:**
-- MLflow standard prediction API format
-- Support for batch and single predictions
-- Comprehensive error handling and logging
-- Interactive session capabilities for testing
+**Export Workflow**:
+1. **Artifact Download**: Extract model from MLflow Registry
+2. **Package Creation**: Build Docker image with all dependencies
+3. **Deployment Scripts**: Automated build, run, and test scripts
+4. **Health Monitoring**: Built-in health checks and monitoring endpoints
+
+## Key File References
+
+**Primary Components:**
+- `e2e_mlflow.py:95-120` - E2EConfig dataclass
+- `e2e_mlflow.py:200+` - HuggingFaceModelWrapper implementation
+- `e2e_mlflow.py:400+` - MLflow3E2ELifecycle orchestrator
+- `fastapi_server.py:40-50` - Pydantic request models
+- `demo_serving/scripts/export_model_docker.py` - Export functionality
+
+**Architecture Documentation:**
+- `docs/explaination_e2e.md` - Complete code flow diagram
+- `demo_serving/EXPORT_GUIDE.md` - Remote deployment guide
+- `README.md` - Comprehensive setup and usage instructions
