@@ -2,3 +2,5 @@
 CLAUDE.md
 .claude
 .venv
+local_mlflow_backend
+local_mlflow_logs
