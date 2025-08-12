@@ -89,7 +89,7 @@ aws --endpoint-url=http://localhost:9878 s3 mb s3://aiongenbucket
 mlflow server \
     --host 127.0.0.1 \
     --port 5050 \
-    --backend-store-uri "sqlite:////Users/amitsahu/Desktop/aion_gen/mlflow/mlflow_POC/local_mlflow_backend/mlflow.db" \
+    --backend-store-uri "sqlite:////Users/amitsahu/Desktop/aion_gen/mlflow/MLFLOW_LANGCHAIN_E2E/local_mlflow_backend/mlflow.db" \
     --default-artifact-root "s3://aiongenbucket/production_data/mlartifacts" \
     > "local_mlflow_logs/mlflow_server.log" 2>&1 &
 
@@ -268,7 +268,7 @@ export MLFLOW_S3_ENDPOINT_URL=http://localhost:9878
 mlflow server \
   --host 127.0.0.1 \
   --port 5050 \
-  --backend-store-uri "sqlite:////Users/amitsahu/Desktop/aion_gen/mlflow/mlflow_POC/local_mlflow_backend/mlflow.db" \
+  --backend-store-uri "sqlite:////Users/amitsahu/Desktop/aion_gen/mlflow/MLFLOW_LANGCHAIN_E2E/local_mlflow_backend/mlflow.db" \
   --default-artifact-root "s3://aiongenbucket/production_data/mlartifacts" \
   > "local_mlflow_logs/mlflow_server.log" 2>&1 &
 

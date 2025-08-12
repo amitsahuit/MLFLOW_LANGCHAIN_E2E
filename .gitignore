@@ -4,3 +4,6 @@ CLAUDE.md
 .venv
 local_mlflow_backend
 local_mlflow_logs
+local_staging
+mlruns
+temp_prompts
