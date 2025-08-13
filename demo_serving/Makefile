@@ -323,7 +323,7 @@ export-model: ## Export model to standalone Docker package for remote deployment
 	@echo "$(BLUE)📤 Exporting model for standalone deployment...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Usage:$(NC)"
-	@echo "  python scripts/export_model_docker.py \\"
+	@echo "  ../.venv/bin/python scripts/export_model_docker.py \\"
 	@echo "    --model-uri models:/your-model/1 \\"
 	@echo "    --s3-endpoint-url http://localhost:9878 \\"
 	@echo "    --s3-access-key hadoop \\"
