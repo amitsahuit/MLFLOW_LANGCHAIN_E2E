@@ -79,17 +79,13 @@ class ModelLoader:
             if not os.path.exists(cache_path):
                 return False
             
-            # Check if essential MLflow files exist
-            essential_files = ['MLmodel', 'model']
-            artifacts_dir = os.path.join(cache_path, 'artifacts')
-            
-            if not os.path.exists(artifacts_dir):
+            # Check if MLmodel file exists in subdirectories
+            try:
+                mlmodel_dir = self._find_mlmodel_path(cache_path)
+                self.logger.debug(f"Found valid MLmodel at: {mlmodel_dir}")
+            except ValueError:
+                self.logger.warning("No valid MLmodel file found in cache")
                 return False
-            
-            for file_name in essential_files:
-                if not os.path.exists(os.path.join(artifacts_dir, file_name)):
-                    self.logger.warning(f"Missing essential file: {file_name}")
-                    return False
             
             # Check cache age (optional - could implement TTL)
             cache_age = time.time() - os.path.getmtime(cache_path)
@@ -106,36 +102,48 @@ class ModelLoader:
             self.logger.warning(f"Cache validation failed: {e}")
             return False
     
+    def _find_mlmodel_path(self, base_dir: str) -> str:
+        """Find the MLmodel file in nested subdirectories."""
+        base_path = Path(base_dir)
+        
+        # Look for MLmodel files in subdirectories
+        mlmodel_files = list(base_path.rglob("MLmodel"))
+        
+        if not mlmodel_files:
+            raise ValueError(f"No MLmodel file found in {base_dir} or its subdirectories")
+        
+        if len(mlmodel_files) == 1:
+            return str(mlmodel_files[0].parent)
+        
+        # If multiple MLmodel files exist, use the most recently modified one
+        latest_mlmodel = max(mlmodel_files, key=lambda p: p.stat().st_mtime)
+        self.logger.info(f"Found {len(mlmodel_files)} MLmodel files, using most recent: {latest_mlmodel.parent}")
+        
+        return str(latest_mlmodel.parent)
+
     def _verify_model_artifacts(self, artifact_dir: str) -> None:
         """Verify that downloaded artifacts are complete."""
         artifact_path = Path(artifact_dir)
         
-        # Check for MLmodel file
-        mlmodel_file = artifact_path / "MLmodel"
-        if not mlmodel_file.exists():
-            raise ValueError(f"MLmodel file not found in {artifact_dir}")
-        
-        # Check for model directory
-        model_dir = artifact_path / "model"
-        if not model_dir.exists():
-            raise ValueError(f"Model directory not found in {artifact_dir}")
+        # Find MLmodel file in subdirectories
+        try:
+            mlmodel_dir = self._find_mlmodel_path(str(artifact_path))
+            self.logger.info(f"Found MLmodel at: {mlmodel_dir}")
+        except ValueError as e:
+            raise ValueError(f"MLmodel file not found in {artifact_dir}: {e}")
         
         self.logger.info("Model artifact verification passed")
     
     def _load_model_from_cache(self, cache_path: str) -> Any:
         """Load MLflow model from local cache."""
         try:
-            # Find the MLmodel file
-            artifacts_dir = os.path.join(cache_path, 'artifacts')
-            mlmodel_path = os.path.join(artifacts_dir)
+            # Find the MLmodel file in subdirectories
+            mlmodel_dir = self._find_mlmodel_path(cache_path)
             
-            if not os.path.exists(mlmodel_path):
-                raise ValueError(f"MLmodel not found at {mlmodel_path}")
-            
-            self.logger.info(f"Loading MLflow model from {mlmodel_path}")
+            self.logger.info(f"Loading MLflow model from {mlmodel_dir}")
             
             # Load the model using MLflow
-            model = mlflow.pyfunc.load_model(mlmodel_path)
+            model = mlflow.pyfunc.load_model(mlmodel_dir)
             
             self.logger.info("Model loaded successfully")
             return model

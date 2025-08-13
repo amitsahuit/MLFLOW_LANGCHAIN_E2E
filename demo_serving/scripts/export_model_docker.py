@@ -246,7 +246,7 @@ class ModelExporter:
         dockerfile_content = f'''# Standalone MLflow Model Serving Container
 # Generated automatically by ModelExporter
 
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \\

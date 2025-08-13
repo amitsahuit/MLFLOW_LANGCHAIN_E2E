@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for MLflow Model Serving Application
 # Stage 1: Base Python environment with dependencies
-FROM python:3.10-slim as base
+FROM python:3.12-slim as base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
