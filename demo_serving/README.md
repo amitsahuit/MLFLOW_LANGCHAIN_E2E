@@ -32,37 +32,70 @@ A production-ready, containerized serving solution for MLflow models with S3 int
 
 - Docker and Docker Compose
 - Python 3.9+
-- MLflow model artifacts in S3-compatible storage
+- Ozone S3 gateway (or MLflow model artifacts in S3-compatible storage)
 
-### 1. Clone and Setup
+### Step-by-Step E2E Execution
+
+#### 1. Environment Setup
 
 ```bash
-git clone <repository-url>
+# Navigate to demo serving directory
 cd demo_serving
+
+# Set up virtual environment (if not already done)
+source ../.venv/bin/activate
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your S3 credentials and MLflow configuration
 ```
 
-### 2. Run with Docker Compose
+#### 2. Configure Ozone S3 Gateway
 
 ```bash
-# Start the complete stack (app + dependencies)
-docker-compose up -d
-
-# Or start with MinIO for local testing
-docker-compose --profile with-mlflow up -d
-
-# Or build and start with MinIO for local testing with no cache
-docker-compose --profile with-mlflow build --no-cache
-docker-compose --profile with-mlflow up -d
-
-# Check service status
-docker-compose ps
+# Set Ozone S3 credentials
+export AWS_ACCESS_KEY_ID=hadoop
+export AWS_SECRET_ACCESS_KEY=hadoop
+export AWS_DEFAULT_REGION=us-east-1
+export MLFLOW_S3_ENDPOINT_URL=http://localhost:9878
 ```
 
-### 3. Verify Deployment
+#### 3. Download Model Artifacts
+
+```bash
+# Download model artifacts from Ozone S3 to local cache
+make download-model
+
+# This downloads artifacts to /tmp/mlflow_models/artifacts/
+# Uses configuration from .env file
+```
+
+#### 4. Export Model for Standalone Deployment
+
+```bash
+# Export model to standalone Docker package
+make export-model-run
+
+# This creates a complete deployment package in ./exported_model/
+# Uses both S3 and local cache as fallback
+```
+
+#### 5. Deploy Exported Model
+
+```bash
+# Navigate to exported model directory
+cd exported_model
+
+# Build Docker image
+./build.sh
+
+# Start container
+./run.sh
+
+# Test API endpoints
+./test.sh
+```
+
+#### 6. Verify Standalone Deployment
 
 ```bash
 # Health check
@@ -75,6 +108,19 @@ curl -X POST http://localhost:8000/api/v1/predict \
 
 # View API documentation
 open http://localhost:8000/docs
+```
+
+### Alternative: Docker Compose Deployment
+
+```bash
+# Start the complete stack (app + dependencies)
+docker-compose up -d
+
+# Or start with MinIO for local testing
+docker-compose --profile with-mlflow up -d
+
+# Check service status
+docker-compose ps
 ```
 
 ## 🏗️ Architecture
@@ -165,12 +211,12 @@ Choose your deployment method:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|-----------|
-| `MLFLOW_MODEL_URI` | MLflow model registry URI | `models:/genai-e2e-model/1` | ✅ |
-| `MLFLOW_ARTIFACT_PATH` | S3 path to model artifacts | `s3://bucket/artifacts/1` | ✅ |
-| `S3_ENDPOINT_URL` | S3 endpoint URL | `http://localhost:9878` | ✅ |
-| `S3_ACCESS_KEY` | S3 access key | `hadoop` | ✅ |
-| `S3_SECRET_KEY` | S3 secret key | `hadoop` | ✅ |
-| `S3_BUCKET_NAME` | S3 bucket name | `aiongenbucket` | ✅ |
+| `MLFLOW_MODEL_URI` | MLflow model registry URI | `models:/langchain-e2e-model/1` | ✅ |
+| `MLFLOW_ARTIFACT_PATH` | S3 path to model artifacts | `s3://aiongenbucket/production_data/mlartifacts/1` | ✅ |
+| `S3_ENDPOINT_URL` | S3/Ozone endpoint URL | `http://localhost:9878` | ✅ |
+| `S3_ACCESS_KEY` | S3/Ozone access key | `hadoop` | ✅ |
+| `S3_SECRET_KEY` | S3/Ozone secret key | `hadoop` | ✅ |
+| `S3_BUCKET_NAME` | S3/Ozone bucket name | `aiongenbucket` | ✅ |
 | `HOST` | Server host | `0.0.0.0` | ❌ |
 | `PORT` | Server port | `8000` | ❌ |
 | `LOG_LEVEL` | Logging level | `info` | ❌ |
@@ -185,13 +231,32 @@ Choose your deployment method:
 cp .env.example .env
 ```
 
-Example `.env`:
+Example `.env` for Ozone S3 Gateway:
+```env
+# MLflow Configuration  
+MLFLOW_MODEL_URI=models:/langchain-e2e-model/1
+MLFLOW_ARTIFACT_PATH=s3://aiongenbucket/production_data/mlartifacts/1
+
+# Ozone S3 Gateway Configuration
+S3_ENDPOINT_URL=http://localhost:9878
+S3_ACCESS_KEY=hadoop
+S3_SECRET_KEY=hadoop
+S3_BUCKET_NAME=aiongenbucket
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=info
+WORKERS=1
+```
+
+Example `.env` for AWS S3:
 ```env
 # MLflow Configuration
 MLFLOW_MODEL_URI=models:/my-genai-model/1
 MLFLOW_ARTIFACT_PATH=s3://my-bucket/production/artifacts/1
 
-# S3 Configuration  
+# AWS S3 Configuration  
 S3_ENDPOINT_URL=https://s3.amazonaws.com
 S3_ACCESS_KEY=your-access-key
 S3_SECRET_KEY=your-secret-key
@@ -361,7 +426,45 @@ kubectl logs -f deployment/mlflow-serving -n mlflow-serving
 kubectl port-forward service/mlflow-serving 8000:80 -n mlflow-serving
 ```
 
-### Standalone Deployment
+### Standalone Model Export (Recommended)
+
+The system includes a complete model export functionality that creates standalone Docker packages:
+
+#### Export Features
+- **🏗️ Complete Packaging**: Creates self-contained Docker deployments
+- **📦 S3 Integration**: Downloads model artifacts from Ozone/S3 storage
+- **🔄 Local Fallback**: Uses cached artifacts when S3 is unavailable
+- **🐳 Docker Ready**: Generates Dockerfile, build, run, and test scripts
+- **📋 Documentation**: Auto-generates deployment README and instructions
+
+#### Export Commands
+```bash
+# Using Makefile (recommended)
+make export-model-run          # Export using .env configuration
+make export-and-test          # Export and test the package
+
+# Manual export with custom parameters
+python scripts/export_model_docker.py \
+  --model-uri models:/langchain-e2e-model/1 \
+  --s3-endpoint-url http://localhost:9878 \
+  --s3-access-key hadoop \
+  --s3-secret-key hadoop \
+  --s3-bucket-name aiongenbucket \
+  --output-dir ./exported_model \
+  --local-cache-dir /tmp/mlflow_models/artifacts
+```
+
+#### Export Package Contents
+- **`model/`** - Complete MLflow model artifacts
+- **`app/`** - FastAPI application code  
+- **`Dockerfile`** - Production container configuration
+- **`.env.standalone`** - Standalone configuration (no external dependencies)
+- **`build.sh`** - Docker image build script
+- **`run.sh`** - Container start script
+- **`test.sh`** - API testing script
+- **`README.md`** - Deployment instructions
+
+### Traditional Standalone Deployment
 
 #### Using Python
 ```bash

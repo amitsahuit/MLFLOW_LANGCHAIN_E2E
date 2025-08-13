@@ -8,3 +8,4 @@ local_staging
 mlruns
 temp_prompts
 __pycache__
+demo_serving/exported_model*

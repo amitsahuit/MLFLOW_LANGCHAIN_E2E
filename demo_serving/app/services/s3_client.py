@@ -224,10 +224,19 @@ class S3Client:
             raise
     
     def download_mlflow_artifacts(self, artifact_path: str, local_cache_dir: str) -> str:
-        """Download MLflow artifacts from S3 to local cache."""
+        """Download MLflow artifacts from S3 to local cache, or use local path if already local."""
+        # Handle local file paths (standalone mode)
+        if artifact_path.startswith('file://'):
+            local_path = artifact_path[7:]  # Remove 'file://'
+            if os.path.exists(local_path):
+                self.logger.info(f"Using local artifacts at {local_path}")
+                return local_path
+            else:
+                raise ValueError(f"Local artifact path does not exist: {local_path}")
+        
         # Parse S3 path
         if not artifact_path.startswith('s3://'):
-            raise ValueError(f"Invalid S3 path: {artifact_path}")
+            raise ValueError(f"Invalid artifact path: {artifact_path}. Must start with 's3://' or 'file://'")
         
         # Extract bucket and prefix from s3://bucket/prefix
         s3_path = artifact_path[5:]  # Remove 's3://'

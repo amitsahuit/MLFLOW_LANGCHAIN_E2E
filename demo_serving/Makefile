@@ -28,10 +28,13 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "$(GREEN)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Usage examples:$(NC)"
-	@echo "  make install-dev    # Setup development environment"
-	@echo "  make test           # Run all tests"
-	@echo "  make docker-build   # Build Docker image"
-	@echo "  make k8s-deploy     # Deploy to Kubernetes"
+	@echo "  make install-dev      # Setup development environment"
+	@echo "  make download-model   # Download model artifacts from S3"
+	@echo "  make export-model-run # Export model to standalone package"
+	@echo "  make export-and-test  # Export and test model package"
+	@echo "  make test             # Run all tests"
+	@echo "  make docker-build     # Build Docker image"
+	@echo "  make k8s-deploy       # Deploy to Kubernetes"
 
 # Development setup
 install: ## Install production dependencies
@@ -347,25 +350,43 @@ export-example: ## Show example export command
 	@echo "  ./run.sh"
 	@echo "  # Access Swagger UI: http://localhost:8000/docs"
 
-export-and-test: ## Export model and test the package locally
+export-model-run: ## Export model using configuration from .env file
+	@echo "$(BLUE)🧪 Exporting model using .env configuration...$(NC)"
+	@if [ ! -f .env ]; then \
+		echo "$(RED)❌ .env file not found. Please create it first.$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)📋 Using configuration from .env file$(NC)"
+	$(PYTHON) scripts/export_model_docker.py \
+		--model-uri $$(grep '^MLFLOW_MODEL_URI=' .env | cut -d'=' -f2) \
+		--s3-endpoint-url $$(grep '^S3_ENDPOINT_URL=' .env | cut -d'=' -f2) \
+		--s3-access-key $$(grep '^S3_ACCESS_KEY=' .env | cut -d'=' -f2) \
+		--s3-secret-key $$(grep '^S3_SECRET_KEY=' .env | cut -d'=' -f2) \
+		--s3-bucket-name $$(grep '^S3_BUCKET_NAME=' .env | cut -d'=' -f2) \
+		--output-dir ./exported_model \
+		--local-cache-dir /tmp/mlflow_models/artifacts
+	@echo "$(GREEN)✅ Model export completed!$(NC)"
+
+export-and-test: ## Export model and test the package locally using .env config
 	@echo "$(BLUE)🧪 Exporting and testing model package...$(NC)"
-	@echo ""
-	@echo "$(YELLOW)⚠️  This requires S3 credentials. Example:$(NC)"
-	@echo ""
-	@echo "python scripts/export_model_docker.py \\"
-	@echo "  --model-uri models:/langchain-e2e-model/1 \\"
-	@echo "  --s3-endpoint-url http://localhost:9878 \\"
-	@echo "  --s3-access-key hadoop \\"
-	@echo "  --s3-secret-key hadoop \\"
-	@echo "  --s3-bucket-name aiongenbucket \\"
-	@echo "  --output-dir ./test_export && \\"
-	@echo "cd test_export && \\"
-	@echo "./build.sh && \\"
-	@echo "./run.sh && \\"
-	@echo "sleep 10 && \\"
-	@echo "./test.sh"
-	@echo ""
-	@echo "$(GREEN)💡 Run this command with your actual credentials!$(NC)"
+	@$(MAKE) export-model-run
+	@echo "$(BLUE)🐳 Building and testing exported package...$(NC)"
+	@if [ -d ./exported_model ]; then \
+		cd exported_model && \
+		chmod +x build.sh run.sh test.sh && \
+		echo "$(YELLOW)Building Docker image...$(NC)" && \
+		./build.sh && \
+		echo "$(YELLOW)Starting container...$(NC)" && \
+		./run.sh && \
+		echo "$(YELLOW)Waiting for service to start...$(NC)" && \
+		sleep 15 && \
+		echo "$(YELLOW)Running tests...$(NC)" && \
+		./test.sh && \
+		echo "$(GREEN)🎉 Export and test completed successfully!$(NC)"; \
+	else \
+		echo "$(RED)❌ Export failed - exported_model directory not found$(NC)"; \
+		exit 1; \
+	fi
 
 # All-in-one targets
 dev-setup: install-dev setup-env ## Complete development setup

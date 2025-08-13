@@ -35,7 +35,8 @@ class ModelExporter:
                  s3_access_key: str,
                  s3_secret_key: str,
                  s3_bucket_name: str,
-                 output_dir: str = "./exported_model"):
+                 output_dir: str = "./exported_model",
+                 local_cache_dir: Optional[str] = None):
         
         self.model_uri = model_uri
         self.s3_endpoint_url = s3_endpoint_url
@@ -43,6 +44,7 @@ class ModelExporter:
         self.s3_secret_key = s3_secret_key
         self.s3_bucket_name = s3_bucket_name
         self.output_dir = Path(output_dir)
+        self.local_cache_dir = local_cache_dir
         
         # Initialize S3 client
         self.s3_client = boto3.client(
@@ -75,11 +77,14 @@ class ModelExporter:
             
             # Try to find artifacts by listing common MLflow paths
             possible_paths = [
-                f"production_data/mlartifacts/1/{model_name}/artifacts/model/",
-                f"production_data/artifacts/{model_name}/{model_version}/",
-                f"mlartifacts/1/{model_name}/artifacts/model/",
-                f"artifacts/{model_name}/{model_version}/",
-                f"{model_name}/{model_version}/artifacts/model/",
+                f"production_data/mlartifacts/{model_version}/models/",
+                f"production_data/mlartifacts/{model_version}/",
+                f"production_data/mlartifacts/1/models/",
+                f"production_data/mlartifacts/1/",
+                f"mlartifacts/{model_version}/models/",
+                f"mlartifacts/{model_version}/",
+                f"mlartifacts/1/models/",
+                f"mlartifacts/1/",
                 # Add more patterns as needed
             ]
             
@@ -120,7 +125,12 @@ class ModelExporter:
                     print(f"❌ Error searching for artifacts: {e}")
             
             if not artifacts_path:
-                raise ValueError(f"Could not find model artifacts for {self.model_uri}")
+                # Try using local cache if available
+                if self.local_cache_dir and Path(self.local_cache_dir).exists():
+                    print(f"⚠️  S3 artifacts not found. Trying local cache: {self.local_cache_dir}")
+                    return self.copy_from_local_cache()
+                else:
+                    raise ValueError(f"Could not find model artifacts for {self.model_uri}")
         
         else:
             # Direct S3 path
@@ -167,6 +177,69 @@ class ModelExporter:
         except ClientError as e:
             print(f"❌ Error downloading artifacts: {e}")
             raise
+    
+    def copy_from_local_cache(self) -> Dict[str, Any]:
+        """Copy model artifacts from local cache directory."""
+        print(f"📂 Using local cache: {self.local_cache_dir}")
+        
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        model_dir = self.output_dir / "model"
+        model_dir.mkdir(exist_ok=True)
+        
+        local_cache = Path(self.local_cache_dir)
+        copied_files = []
+        
+        # Look for model artifacts in common patterns
+        model_patterns = [
+            "models/*/artifacts/",
+            "artifacts/models/*/artifacts/",
+            "**/artifacts/",
+        ]
+        
+        found_artifacts = False
+        for pattern in model_patterns:
+            artifact_dirs = list(local_cache.glob(pattern))
+            if artifact_dirs:
+                # Use the first found artifacts directory
+                artifact_dir = artifact_dirs[0]
+                print(f"✅ Found local artifacts at: {artifact_dir}")
+                
+                # Copy all files recursively
+                for file_path in artifact_dir.rglob('*'):
+                    if file_path.is_file():
+                        # Calculate relative path
+                        relative_path = file_path.relative_to(artifact_dir)
+                        dest_path = model_dir / relative_path
+                        dest_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Copy file
+                        shutil.copy2(file_path, dest_path)
+                        copied_files.append(str(dest_path))
+                        print(f"📋 Copied: {relative_path}")
+                
+                found_artifacts = True
+                break
+        
+        if not found_artifacts:
+            raise ValueError(f"No model artifacts found in local cache: {self.local_cache_dir}")
+        
+        print(f"✅ Copied {len(copied_files)} files from local cache")
+        
+        # Create metadata file
+        metadata = {
+            "model_uri": self.model_uri,
+            "local_cache_path": str(local_cache),
+            "export_timestamp": __import__('time').time(),
+            "downloaded_files": copied_files,
+            "source": "local_cache"
+        }
+        
+        metadata_file = self.output_dir / "model_metadata.json"
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        return metadata
     
     def create_dockerfile(self) -> None:
         """Create a standalone Dockerfile for the exported model."""
@@ -297,6 +370,51 @@ RELOAD=false
             shutil.copy2(requirements_src, requirements_dest)
             print(f"✅ Copied requirements.txt")
     
+    def fix_s3_client_for_standalone(self) -> None:
+        """Fix S3 client to handle local file paths in standalone mode."""
+        s3_client_path = self.output_dir / "app" / "services" / "s3_client.py"
+        
+        if not s3_client_path.exists():
+            print(f"⚠️  S3 client file not found: {s3_client_path}")
+            return
+        
+        # Read the current file
+        with open(s3_client_path, 'r') as f:
+            content = f.read()
+        
+        # Replace the download_mlflow_artifacts method to handle local paths
+        old_method = '''    def download_mlflow_artifacts(self, artifact_path: str, local_cache_dir: str) -> str:
+        """Download MLflow artifacts from S3 to local cache."""
+        # Parse S3 path
+        if not artifact_path.startswith('s3://'):
+            raise ValueError(f"Invalid S3 path: {artifact_path}")'''
+        
+        new_method = '''    def download_mlflow_artifacts(self, artifact_path: str, local_cache_dir: str) -> str:
+        """Download MLflow artifacts from S3 to local cache, or use local path if already local."""
+        # Handle local file paths (standalone mode)
+        if artifact_path.startswith('file://'):
+            local_path = artifact_path[7:]  # Remove 'file://'
+            if os.path.exists(local_path):
+                self.logger.info(f"Using local artifacts at {local_path}")
+                return local_path
+            else:
+                raise ValueError(f"Local artifact path does not exist: {local_path}")
+        
+        # Parse S3 path
+        if not artifact_path.startswith('s3://'):
+            raise ValueError(f"Invalid artifact path: {artifact_path}. Must start with 's3://' or 'file://'")'''
+        
+        if old_method in content:
+            content = content.replace(old_method, new_method)
+            
+            # Write the updated content back
+            with open(s3_client_path, 'w') as f:
+                f.write(content)
+            
+            print(f"✅ Fixed S3 client for standalone mode: {s3_client_path}")
+        else:
+            print(f"⚠️  S3 client method pattern not found for replacement")
+    
     def create_deployment_scripts(self) -> None:
         """Create deployment helper scripts."""
         
@@ -331,6 +449,10 @@ set -e
 
 echo "🚀 Starting MLflow Model Serving Container..."
 
+# Default port mapping (can be overridden by environment variable)
+HOST_PORT=${HOST_PORT:-8000}
+CONTAINER_PORT=8000
+
 # Stop existing container if running
 docker stop mlflow-serving 2>/dev/null || true
 docker rm mlflow-serving 2>/dev/null || true
@@ -338,7 +460,7 @@ docker rm mlflow-serving 2>/dev/null || true
 # Run the container
 docker run -d \\
   --name mlflow-serving \\
-  -p 8000:8000 \\
+  -p ${HOST_PORT}:${CONTAINER_PORT} \\
   mlflow-model-serving:latest
 
 echo "✅ Container started successfully!"
@@ -348,15 +470,18 @@ docker ps | grep mlflow-serving
 
 echo ""
 echo "🌐 Access points:"
-echo "  • Swagger UI: http://localhost:8000/docs"
-echo "  • Health Check: http://localhost:8000/api/v1/health"
-echo "  • Model Info: http://localhost:8000/api/v1/info"
+echo "  • Swagger UI: http://localhost:${HOST_PORT}/docs"
+echo "  • Health Check: http://localhost:${HOST_PORT}/api/v1/health"
+echo "  • Model Info: http://localhost:${HOST_PORT}/api/v1/info"
 echo ""
 echo "📊 To view logs:"
 echo "docker logs -f mlflow-serving"
 echo ""
 echo "🛑 To stop:"
 echo "docker stop mlflow-serving"
+echo ""
+echo "💡 To use a different port, set HOST_PORT environment variable:"
+echo "   HOST_PORT=9000 ./run.sh"
 '''
         
         run_path = self.output_dir / "run.sh"
@@ -370,7 +495,15 @@ set -e
 
 echo "🧪 Testing MLflow Model Serving API..."
 
-BASE_URL="http://localhost:8000"
+# Auto-detect port from running container
+HOST_PORT=$(docker port mlflow-serving 8000/tcp 2>/dev/null | cut -d: -f2)
+if [ -z "$HOST_PORT" ]; then
+    echo "⚠️  Container not running or port not mapped. Using default port 8000"
+    HOST_PORT=8000
+fi
+
+BASE_URL="http://localhost:${HOST_PORT}"
+echo "🌐 Testing API at: $BASE_URL"
 
 # Wait for service to be ready
 echo "⏳ Waiting for service to be ready..."
@@ -388,27 +521,33 @@ echo "🔍 Testing endpoints:"
 
 # Health check
 echo "1. Health Check:"
-curl -s "$BASE_URL/api/v1/health" | jq '.'
+curl -s "$BASE_URL/api/v1/health" | jq '.' || echo "Failed to get health status"
 
 echo ""
 echo "2. Model Info:"
-curl -s "$BASE_URL/api/v1/info" | jq '.'
+curl -s "$BASE_URL/api/v1/info" | jq '.' || echo "Failed to get model info"
 
 echo ""
 echo "3. Single Prediction:"
 curl -s -X POST "$BASE_URL/api/v1/predict" \\
   -H "Content-Type: application/json" \\
-  -d '{"question": "What is machine learning?"}' | jq '.'
+  -d '{"question": "What is machine learning?"}' | jq '.' || echo "Failed single prediction"
 
 echo ""
-echo "4. MLflow Compatible Endpoint:"
+echo "4. Batch Prediction:"
+curl -s -X POST "$BASE_URL/api/v1/batch-predict" \\
+  -H "Content-Type: application/json" \\
+  -d '{"questions": ["What is AI?", "How does ML work?"]}' | jq '.' || echo "Failed batch prediction"
+
+echo ""
+echo "5. MLflow Compatible Endpoint:"
 curl -s -X POST "$BASE_URL/api/v1/invocations" \\
   -H "Content-Type: application/json" \\
-  -d '{"dataframe_split": {"columns": ["question"], "data": [["What is AI?"]]}}' | jq '.'
+  -d '{"dataframe_split": {"columns": ["question"], "data": [["What is AI?"]]}}' | jq '.' || echo "Failed MLflow endpoint"
 
 echo ""
 echo "✅ All tests completed!"
-echo "🌐 Open Swagger UI: http://localhost:8000/docs"
+echo "🌐 Open Swagger UI: $BASE_URL/docs"
 '''
         
         test_path = self.output_dir / "test.sh"
@@ -580,6 +719,9 @@ curl -v http://localhost:8000/api/v1/health
         # 2. Copy application code
         self.copy_application_code()
         
+        # 2.5. Fix S3 client for standalone mode
+        self.fix_s3_client_for_standalone()
+        
         # 3. Create standalone configuration
         self.create_standalone_config()
         
@@ -640,6 +782,10 @@ def main():
         default="./exported_model",
         help="Output directory for the deployment package (default: ./exported_model)"
     )
+    parser.add_argument(
+        "--local-cache-dir",
+        help="Local cache directory to use as fallback when S3 artifacts are not available"
+    )
     
     args = parser.parse_args()
     
@@ -650,7 +796,8 @@ def main():
             s3_access_key=args.s3_access_key,
             s3_secret_key=args.s3_secret_key,
             s3_bucket_name=args.s3_bucket_name,
-            output_dir=args.output_dir
+            output_dir=args.output_dir,
+            local_cache_dir=args.local_cache_dir
         )
         
         exporter.export_complete_package()
